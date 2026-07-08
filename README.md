@@ -1,45 +1,45 @@
-# 语音同声传译
+# Voice Simultaneous Interpretation
 
-基于 DeepSeek API + CosyVoice 本地 TTS 的实时语音同声传译系统（中文 -> 英文）。采用三线程流水线架构，录音、翻译合成、播放互不阻塞，实现边说边译边播。
+A real-time voice simultaneous interpretation system (Chinese -> English) based on DeepSeek API + CosyVoice local TTS. Uses a three-thread pipeline architecture: recording, translation+synthesis, and playback run concurrently without blocking each other — enabling speak-while-translate-while-play.
 
-## 功能特性
+## Features
 
-- 麦克风实时拾音，Google Speech Recognition 识别中文语音
-- DeepSeek API 中译英翻译
-- 本地 CosyVoice 零样本语音克隆合成英文音频
-- 三线程流水线架构：耳朵（录音）-> 大脑（识别+翻译+合成）-> 嘴巴（播放），互不阻塞
-- 参考音频预处理工具：格式清洗（转 16kHz 单声道 PCM_16）、时长裁剪（保留前 N 秒）
-- 参考音频回放测试工具，用于验证音频是否完整
+- Real-time microphone capture, Google Speech Recognition for Chinese speech recognition
+- DeepSeek API Chinese-to-English translation
+- Local CosyVoice zero-shot voice cloning for English audio synthesis
+- Three-thread pipeline architecture: Ear (recording) -> Brain (recognition + translation + synthesis) -> Mouth (playback), non-blocking
+- Reference audio preprocessing tools: format cleaning (convert to 16kHz mono PCM_16), duration trimming (keep first N seconds)
+- Reference audio playback test tool for verifying audio integrity
 
-## 环境要求
+## Environment Requirements
 
 - Windows 10+
 - Python 3.x
-- 本地部署的 CosyVoice2-0.5B 服务（监听 127.0.0.1:50000）
+- Locally deployed CosyVoice2-0.5B service (listening on 127.0.0.1:50000)
 - DeepSeek API Key
-- 麦克风设备
+- Microphone device
 
-## 依赖
+## Dependencies
 
 ```
 pip install SpeechRecognition openai pygame requests soundfile librosa numpy
 ```
 
-## 目录结构
+## Directory Structure
 
 ```
 .
-├── 主代码同声传译 接入deepseek api +CosyVoice本地运行.txt   # 主程序
-├── 音频转换成CosyVoice能识别出的音频.txt                    # 参考音频格式清洗
-├── 切割音频代码.txt                                         # 参考音频时长裁剪
-├── 音频测试.txt                                              # 参考音频回放测试
-├── 命名为 启动50000端口.bat.txt                              # CosyVoice 启动脚本
-├── .env.example                                              # 环境变量模板
-├── my_voice.wav                                              # 参考音频（需自行准备）
+├── 主代码同声传译 接入deepseek api +CosyVoice本地运行.txt   # Main program
+├── 音频转换成CosyVoice能识别出的音频.txt                    # Reference audio format cleaning
+├── 切割音频代码.txt                                         # Reference audio duration trimming
+├── 音频测试.txt                                              # Reference audio playback test
+├── 命名为 启动50000端口.bat.txt                              # CosyVoice startup script
+├── .env.example                                              # Environment variable template
+├── my_voice.wav                                              # Reference audio (prepare your own)
 └── README.md
 ```
 
-## 安装
+## Installation
 
 ```bash
 git clone https://github.com/doaneruby970-hub/voice-translator.git
@@ -48,82 +48,82 @@ pip install SpeechRecognition openai pygame requests soundfile librosa numpy
 cp .env.example .env
 ```
 
-## 配置
+## Configuration
 
-### 1. 环境变量
+### 1. Environment Variables
 
-复制 `.env.example` 为 `.env`，填入 DeepSeek API Key：
+Copy `.env.example` to `.env` and fill in your DeepSeek API Key:
 
 ```
 DEEPSEEK_API_KEY=sk-your-key-here
 ```
 
-### 2. 启动 CosyVoice 本地服务
+### 2. Start CosyVoice Local Service
 
-参考 `命名为 启动50000端口.bat.txt`，将 CosyVoice 服务启动在 `http://127.0.0.1:50000`。
+Refer to `命名为 启动50000端口.bat.txt` to start the CosyVoice service on `http://127.0.0.1:50000`.
 
-脚本核心命令（请根据实际路径修改）：
+Core script command (modify paths according to your actual setup):
 
 ```bash
 python runtime/python/fastapi/server.py --port 50000 --model_dir pretrained_models/CosyVoice2-0.5B
 ```
 
-### 3. 准备参考音频
+### 3. Prepare Reference Audio
 
-放置一个名为 `my_voice.wav` 的参考音频文件到项目根目录。
+Place a reference audio file named `my_voice.wav` in the project root directory.
 
-参考音频要求：
-- 格式：WAV, 16kHz 采样率, 单声道, PCM_16
-- 时长：10 秒以内
-- 用途：CosyVoice 零样本语音克隆的参考音色
+Reference audio requirements:
+- Format: WAV, 16kHz sample rate, mono, PCM_16
+- Duration: within 10 seconds
+- Purpose: Reference timbre for CosyVoice zero-shot voice cloning
 
-如果音频不符合要求，使用配套工具处理：
+If the audio does not meet the requirements, use the bundled tools to process it:
 
-**格式清洗**（任意格式 -> CosyVoice 标准格式）：
+**Format Cleaning** (any format -> CosyVoice standard format):
 ```bash
 python 音频转换成CosyVoice能识别出的音频.txt
 ```
 
-**时长裁剪**（保留前 10 秒）：
+**Duration Trimming** (keep first 10 seconds):
 ```bash
 python 切割音频代码.txt
 ```
 
-**回放测试**（验证音频是否正常）：
+**Playback Test** (verify audio is working):
 ```bash
 python 音频测试.txt
 ```
 
-### 4. 修改参考音频台词
+### 4. Modify Reference Audio Transcript
 
-编辑主程序文件中的 `REF_TEXT` 变量（第 21 行），将该行文本改为参考音频中实际朗读的内容：
+Edit the `REF_TEXT` variable in the main program file (line 21), changing the text to what is actually spoken in the reference audio:
 
 ```python
-REF_TEXT = "你的参考音频台词"
+REF_TEXT = "your reference audio transcript"
 ```
 
-## 使用方式
+## Usage
 
-确认 CosyVoice 服务已在 50000 端口运行后，执行主程序：
+After confirming the CosyVoice service is running on port 50000, execute the main program:
 
 ```bash
 python 主代码同声传译 接入deepseek api +CosyVoice本地运行.txt
 ```
 
-对着麦克风说中文，程序会自动：
-1. 识别你说的话
-2. 调用 DeepSeek 翻译成英文
-3. 用 CosyVoice 克隆参考音频的音色合成英文语音
-4. 通过扬声器播放翻译结果
+Speak Chinese into the microphone, and the program will automatically:
+1. Recognize what you said
+2. Call DeepSeek to translate into English
+3. Use CosyVoice to clone the reference audio timbre and synthesize English speech
+4. Play the translation result through the speakers
 
-按 `Ctrl+C` 停止。
+Press `Ctrl+C` to stop.
 
-## 注意事项
+## Notes
 
-- 主程序文件是 `.txt` 格式而非 `.py`，运行前建议重命名为 `.py`
-- CosyVoice 服务必须先启动，否则音频合成会失败
-- 参考音频 `my_voice.wav` 必须在项目目录下，且时长控制在 10 秒以内
-- 程序使用 Google Speech Recognition 进行中文识别，需要网络连接
-- 生成的翻译音频文件会在播放后自动删除
-- 静默超过 2 秒视为一句话结束，触发翻译
-- 仅支持中文输入 -> 英文输出，如要修改目标语言请修改翻译 prompt
+- The main program file is in `.txt` format instead of `.py`. It is recommended to rename it to `.py` before running.
+- CosyVoice service must be started first, or audio synthesis will fail.
+- The reference audio `my_voice.wav` must be in the project directory, and its duration must be kept within 10 seconds.
+- The program uses Google Speech Recognition for Chinese recognition, which requires an internet connection.
+- Generated translation audio files are automatically deleted after playback.
+- Silence exceeding 2 seconds is treated as end-of-sentence, triggering translation.
+- Only supports Chinese input -> English output. To modify the target language, edit the translation prompt.
