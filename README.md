@@ -42,7 +42,7 @@ pip install SpeechRecognition openai pygame requests soundfile librosa numpy
 ## 安装
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/doaneruby970-hub/voice-translator.git
 cd voice-translator
 pip install SpeechRecognition openai pygame requests soundfile librosa numpy
 cp .env.example .env
