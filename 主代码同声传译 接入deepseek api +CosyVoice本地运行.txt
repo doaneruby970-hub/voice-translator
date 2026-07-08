@@ -1,0 +1,215 @@
+import threading
+import queue
+import speech_recognition as sr
+from openai import OpenAI
+import time
+import os
+import pygame
+import uuid
+import requests
+import wave
+
+# ================= 配置区 =================
+
+# 🔴 1. DeepSeek Key
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")  # 从环境变量读取
+
+# 🔴 2. 参考音频 (50秒那个)
+REF_AUDIO_PATH = "my_voice.wav"
+
+# 🔴 3. 参考音频台词
+REF_TEXT = "人总是要死的，但死的意义有不同。中国古时候有个文学家叫做司马迁的说过：人固有一死，或重于泰山，或轻于鸿毛"
+
+# ✅ 本地 CosyVoice 地址
+LOCAL_API_URL = "http://127.0.0.1:50000/inference_zero_shot"
+
+# =========================================
+
+# 🎯【核心改动】我们需要两个队列来实现三级流水线
+# 队列1：存放录音数据 (耳朵 -> 大脑)
+audio_queue = queue.Queue()
+# 队列2：存放生成好的音频文件名 (大脑 -> 嘴巴)
+play_queue = queue.Queue()
+
+r = sr.Recognizer()
+
+# 🎯【核心修改】
+# 原来是 1.0秒，改成 2.0秒
+# 意思是：只有当你闭嘴超过 2秒，它才认为你这句说完了
+r.pause_threshold = 2.0
+
+# 说话时的最小音量门槛（保持True让它自动适应环境）
+r.dynamic_energy_threshold = True
+
+# 每一句话最少要持续多久（防止把敲键盘声当成话）
+r.phrase_threshold = 0.3
+
+# 在开始说话前，允许的静音时长（如果一直不说话，它会一直等，不会报错）
+r.non_speaking_duration = 0.5
+
+try:
+    pygame.mixer.init()
+except:
+    pass
+
+print("🚀 系统启动中...")
+try:
+    deepseek_client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+except:
+    pass
+
+
+def generate_local_audio(text, filename):
+    """
+    大脑的工作：生成音频文件
+    """
+    payload = {
+        'tts_text': text,
+        'prompt_text': REF_TEXT
+    }
+
+    try:
+        if not os.path.exists(REF_AUDIO_PATH):
+            print(f"❌ 找不到文件: {REF_AUDIO_PATH}")
+            return False
+
+        with open(REF_AUDIO_PATH, 'rb') as audio_file:
+            files = [('prompt_wav', ('prompt_wav', audio_file, 'application/octet-stream'))]
+
+            print(f"📡 [请求] -> 正在克隆: {text}")
+
+            # 发送请求
+            response = requests.request("GET", LOCAL_API_URL, data=payload, files=files, stream=True)
+
+            if response.status_code == 200:
+                raw_data = b""
+                for chunk in response.iter_content(chunk_size=4096):
+                    raw_data += chunk
+
+                with wave.open(filename, 'wb') as wav_file:
+                    wav_file.setnchannels(1)
+                    wav_file.setsampwidth(2)
+                    wav_file.setframerate(22050)
+                    wav_file.writeframes(raw_data)
+                return True
+            else:
+                print(f"❌ 生成失败 (状态码 {response.status_code})")
+                return False
+
+    except Exception as e:
+        print(f"❌ 错误: {e}")
+        return False
+
+
+def processor_thread():
+    """
+    🧠【大脑线程】：只负责识别、翻译、合成，绝对不等待播放！
+    """
+    print("🧠 大脑(处理线程)就绪...")
+    while True:
+        audio = audio_queue.get()
+        if audio is None: break
+
+        try:
+            # 1. 识别
+            text_cn = r.recognize_google(audio, language='zh-CN')
+            print(f"👤 [你说]: {text_cn}")
+
+            # 2. 翻译
+            resp = deepseek_client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "user", "content": f"Translate '{text_cn}' to English directly. Only output translation."}]
+            )
+            text_en = resp.choices[0].message.content
+            print(f"✅ [翻译]: {text_en}")
+
+            # 3. 合成音频文件
+            filename = f"voice_{uuid.uuid4().hex}.wav"
+            success = generate_local_audio(text_en, filename)
+
+            if success:
+                # 关键点：生成好了直接扔给嘴巴队列，自己赶紧去处理下一句！
+                print(f"📦 音频已生成，扔给播放队列 -> {play_queue.qsize()} 个待播")
+                play_queue.put(filename)
+
+        except sr.UnknownValueError:
+            pass  # 没听清忽略
+        except Exception as e:
+            print(f"⚠️ 处理出错: {e}")
+
+        audio_queue.task_done()
+
+
+def player_thread():
+    """
+    👄【嘴巴线程】：只负责从队列拿文件播放，这就是个无情的播放机器
+    """
+    print("👄 嘴巴(播放线程)就绪...")
+    while True:
+        # 这里会阻塞等待，直到有新的音频文件过来
+        filename = play_queue.get()
+        if filename is None: break
+
+        try:
+            print(f"🔊 [正在播放]...")
+
+            if pygame.mixer.music.get_busy():
+                pygame.mixer.music.stop()
+                pygame.mixer.music.unload()
+
+            pygame.mixer.music.load(filename)
+            pygame.mixer.music.play()
+
+            # 只有这里会卡住，但只卡嘴巴，不卡大脑！
+            while pygame.mixer.music.get_busy():
+                time.sleep(0.1)
+
+            pygame.mixer.music.unload()
+
+        except Exception as e:
+            print(f"❌ 播放出错: {e}")
+
+        finally:
+            # 播完删掉
+            try:
+                if os.path.exists(filename):
+                    os.remove(filename)
+            except:
+                pass
+
+        play_queue.task_done()
+
+
+# ================= 启动 =================
+print("\n" + "=" * 50)
+print("🎙️ 【CosyVoice 超级流水线版】")
+print("✅ 耳朵 -> 大脑 -> 嘴巴 三线程全开")
+print("👉 你可以一直说话，翻译不会卡顿！")
+print("=" * 50 + "\n")
+
+# 启动大脑线程
+t_process = threading.Thread(target=processor_thread)
+t_process.daemon = True
+t_process.start()
+
+# 启动嘴巴线程
+t_play = threading.Thread(target=player_thread)
+t_play.daemon = True
+t_play.start()
+
+# 主线程（耳朵）开始工作
+with sr.Microphone() as source:
+    r.adjust_for_ambient_noise(source, duration=1)
+    print("🎤 开始！请说话...\n")
+    while True:
+        try:
+            # 这里的 listen 是阻塞的，但不会影响后台的处理
+            print("👂 听音中...")
+            audio = r.listen(source)
+            print("📦 录音结束 -> 给大脑")
+            audio_queue.put(audio)
+        except KeyboardInterrupt:
+            break
+        except:
+            pass

@@ -1,0 +1,45 @@
+import librosa
+import soundfile as sf
+import os
+import numpy as np
+
+# ================= 配置 =================
+# 1. 这里填你网上下载的那个文件的名字 (支持 mp3, wav, m4a 等)
+INPUT_FILE = "my_voice.wav"
+
+# 2. 输出的标准文件名 (不用改)
+OUTPUT_FILE = "my_voice.wav"
+
+
+# =======================================
+
+def fix_audio():
+    print(f"🧹 正在清洗音频: {INPUT_FILE} ...")
+
+    if not os.path.exists(INPUT_FILE):
+        print("❌ 找不到文件！请确认文件名写对了吗？")
+        return
+
+    try:
+        # 1. 加载音频 (librosa 会自动把所有格式转成数字信号)
+        # sr=16000 表示强制转成 16k 采样率 (CosyVoice 标准)
+        # mono=True 表示强制混合成单声道
+        y, s = librosa.load(INPUT_FILE, sr=16000, mono=True)
+
+        # 2. 消除静音 (可选，去掉头尾的空白)
+        y, _ = librosa.effects.trim(y, top_db=20)
+
+        # 3. 重新保存为标准的 WAV (PCM_16)
+        sf.write(OUTPUT_FILE, y, 16000, subtype='PCM_16')
+
+        print("✅ 清洗完成！")
+        print(f"👉 新文件已生成: {OUTPUT_FILE}")
+        print("💡 请把这个新文件改名为 my_voice.wav 替换掉原来的！")
+
+    except Exception as e:
+        print(f"❌ 处理失败: {e}")
+        print("提示：如果是 mp3 文件报错，你可能需要安装 ffmpeg，或者直接找个在线网站转成 wav")
+
+
+if __name__ == "__main__":
+    fix_audio()

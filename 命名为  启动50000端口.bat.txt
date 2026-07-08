@@ -1,0 +1,8 @@
+@echo off
+:: 1. 切换到正确的文件夹 (你的安装路径)
+cd /d "E:\CosyVoice显卡ai人声\CosyVoice-fast-new\CosyVoice-fast"
+
+:: 2. 启动服务 (使用相对路径加载模型，防止中文路径报错)
+.\py312\python.exe runtime\python\fastapi\server.py --port 50000 --model_dir "pretrained_models\CosyVoice2-0.5B"
+
+pause

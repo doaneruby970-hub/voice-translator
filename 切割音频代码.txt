@@ -1,0 +1,47 @@
+import soundfile as sf
+import os
+
+# ================= 配置 =================
+INPUT_FILE = "my_voice.wav"  # 你那个 50秒 的文件
+OUTPUT_FILE = "my_voice.wav"  # 切割后的新文件
+CUT_SECONDS = 10  # 只保留前 10 秒
+
+
+# =======================================
+
+def cut_audio():
+    print(f"✂️ 正在把 {INPUT_FILE} 切割成 {CUT_SECONDS} 秒...")
+
+    if not os.path.exists(INPUT_FILE):
+        print("❌ 找不到文件！请确认 my_voice.wav 在旁边。")
+        return
+
+    try:
+        # 读取音频
+        data, samplerate = sf.read(INPUT_FILE)
+
+        # 计算 10 秒对应多少数据点
+        # 数据点 = 秒数 * 采样率
+        max_frames = CUT_SECONDS * samplerate
+
+        # 如果音频本来就短，就不切了
+        if len(data) <= max_frames:
+            print("⚠️ 音频本来就不到 10 秒，无需切割，直接另存。")
+            cut_data = data
+        else:
+            # 切割
+            cut_data = data[:max_frames]
+
+        # 保存
+        sf.write(OUTPUT_FILE, cut_data, samplerate)
+
+        print("✅ 切割完成！")
+        print(f"👉 新文件: {OUTPUT_FILE}")
+        print("💡 请把这个新文件改名为 my_voice.wav (删掉旧的)！")
+
+    except Exception as e:
+        print(f"❌ 失败: {e}")
+
+
+if __name__ == "__main__":
+    cut_audio()
